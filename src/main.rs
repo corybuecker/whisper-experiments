@@ -29,16 +29,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let device = Device::new_metal(0)?;
 
-    let tokenizer = Tokenizer::from_file(PathBuf::from("model/tokenizer.json")).unwrap();
-    let config: whisper::Config =
-        serde_json::from_slice(&std::fs::read(PathBuf::from("model/config.json"))?)?;
+    let tokenizer =
+        Tokenizer::from_file(PathBuf::from("/Volumes/AI/models/whisper/tokenizer.json")).unwrap();
+    let config: whisper::Config = serde_json::from_slice(&std::fs::read(PathBuf::from(
+        "/Volumes/AI/models/whisper/config.json",
+    ))?)?;
 
     let vb = unsafe {
-        VarBuilder::from_mmaped_safetensors(&["model/model.safetensors"], whisper::DTYPE, &device)?
+        VarBuilder::from_mmaped_safetensors(
+            &["/Volumes/AI/models/whisper/model.safetensors"],
+            whisper::DTYPE,
+            &device,
+        )?
     };
 
     let mut pcm_data: Vec<f32> = Vec::new();
     let sample = PathBuf::from_str("output.wav")?;
+    //   let sample = PathBuf::from_str("output.short90s.wav")?;
     let sample = File::open(sample)?;
     let mss = MediaSourceStream::new(Box::new(sample), MediaSourceStreamOptions::default());
 
@@ -91,15 +98,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let mel_binary = include_bytes!("../melfilters128.bytes");
+    let mel_binary_128 = include_bytes!("../melfilters128.bytes");
+
+    let mel_binary = mel_binary_128;
+    let byte_length = 128;
+
     let mut mel_filters = vec![0f32; mel_binary.len() / 4];
     <byteorder::LittleEndian as byteorder::ByteOrder>::read_f32_into(mel_binary, &mut mel_filters);
 
+    debug!("🚧 pcm data {:#?}", pcm_data.len());
+
     let mel = audio::pcm_to_mel(&config, &pcm_data, &mel_filters);
     let mel_length = mel.len();
-    debug!("🚧 {:#?}", mel_length);
 
-    let mel = Tensor::from_vec(mel, (1, 128, mel_length / 128), &device)?;
+    let mel = Tensor::from_vec(mel, (1, byte_length, mel_length / byte_length), &device)?;
 
     let model = whisper::model::Whisper::load(&vb, config)?;
     let mut decoder = decoder::Decoder::new(model, tokenizer, &device)?;
