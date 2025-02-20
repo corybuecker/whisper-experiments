@@ -5,7 +5,7 @@ use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self, audio};
 use hound::WavReader;
-use std::path::PathBuf;
+use std::{fs::read, path::PathBuf};
 use tokenizers::Tokenizer;
 use tracing::{debug, Level};
 
@@ -25,14 +25,6 @@ async fn main() -> Result<()> {
         "/Volumes/AI/models/whisper/config.json",
     ))?)?;
 
-    let vb = unsafe {
-        VarBuilder::from_mmaped_safetensors(
-            &["/Volumes/AI/models/whisper/model.safetensors"],
-            whisper::DTYPE,
-            &device,
-        )?
-    };
-
     let mut wav = WavReader::open("output.mono.wav")?;
     //   let mut wav = WavReader::open("full.wav")?;
 
@@ -51,12 +43,12 @@ async fn main() -> Result<()> {
 
     debug!("🚧 PCM data {:#?}", pcm_data.len());
 
-    let mel_binary_128 = include_bytes!("../melfilters128.bytes");
+    let mel_binary_128 = read("melfilters128.bytes")?;
     let byte_length = 128;
     let mut mel_filters = vec![0f32; mel_binary_128.len() / 4];
 
     <byteorder::LittleEndian as byteorder::ByteOrder>::read_f32_into(
-        mel_binary_128,
+        &mel_binary_128,
         &mut mel_filters,
     );
 
@@ -64,6 +56,8 @@ async fn main() -> Result<()> {
     let mel_length = mel.len();
     let mel = Tensor::from_vec(mel, (1, byte_length, mel_length / byte_length), &device)?;
 
+    let file = read("/Volumes/AI/models/whisper/model.safetensors")?;
+    let vb = VarBuilder::from_slice_safetensors(&file, whisper::DTYPE, &device)?;
     let model = whisper::model::Whisper::load(&vb, config)?;
     let mut decoder = decoder::Decoder::new(model, tokenizer, &device)?;
 

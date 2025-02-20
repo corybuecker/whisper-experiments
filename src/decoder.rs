@@ -44,10 +44,12 @@ fn build_mask_tensors(
         .context("could not get token")?
         .try_into()?;
 
+    #[allow(clippy::needless_range_loop)]
     for i in start_timestamp_token..mask_timestamps.len() {
         mask_timestamps[i] = f32::NEG_INFINITY;
     }
 
+    #[allow(clippy::needless_range_loop)]
     for i in 0..start_timestamp_token {
         mask_non_timestamps[i] = f32::NEG_INFINITY;
     }
@@ -108,6 +110,7 @@ impl Decoder {
             .context("could not get token")?
             .try_into()?;
 
+        #[allow(clippy::needless_range_loop)]
         for i in start_timestamp_token..=(timestamp - 1) {
             mask[i] = f32::NEG_INFINITY;
         }
