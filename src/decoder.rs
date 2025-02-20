@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use candle_core::{Device, IndexOp, Tensor, D};
 use candle_nn::ops::{log_softmax, softmax};
 use candle_transformers::models::whisper::{self as m, model::Whisper};
-use core::f32;
 use tokenizers::Tokenizer;
 use tracing::{debug, info};
 

@@ -1,4 +1,5 @@
 mod decoder;
+mod signal_processing;
 
 use anyhow::Result;
 use candle_core::{Device, Tensor};
