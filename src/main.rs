@@ -1,26 +1,16 @@
 mod decoder;
 
+use anyhow::Result;
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self, audio};
-use std::{error::Error, fs::File, path::PathBuf, str::FromStr};
-use symphonia::{
-    core::{
-        audio::{AudioBufferRef, Signal},
-        codecs::DecoderOptions,
-        conv::FromSample,
-        formats::FormatOptions,
-        io::{MediaSourceStream, MediaSourceStreamOptions},
-        meta::MetadataOptions,
-        probe::Hint,
-    },
-    default::{get_codecs, get_probe},
-};
+use hound::WavReader;
+use std::path::PathBuf;
 use tokenizers::Tokenizer;
 use tracing::{debug, Level};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
             .with_max_level(Level::DEBUG)
@@ -43,74 +33,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )?
     };
 
-    let mut pcm_data: Vec<f32> = Vec::new();
-    let sample = PathBuf::from_str("output.wav")?;
-    //   let sample = PathBuf::from_str("output.short90s.wav")?;
-    let sample = File::open(sample)?;
-    let mss = MediaSourceStream::new(Box::new(sample), MediaSourceStreamOptions::default());
+    let mut wav = WavReader::open("output.mono.wav")?;
+    //   let mut wav = WavReader::open("full.wav")?;
 
-    let metadata_opts = MetadataOptions::default();
-    let format_opts = FormatOptions::default();
-    let hint = Hint::default();
+    let spec = wav.spec();
 
-    let metadata = get_probe().format(&hint, mss, &format_opts, &metadata_opts)?;
-    let mut format = metadata.format;
-    let tracks = format.tracks();
-    let track = &tracks[0];
+    debug!(
+        "🚧 Audio specs - Channels: {}, Sample rate: {}",
+        spec.channels, spec.sample_rate
+    );
 
-    let decode_opts = DecoderOptions::default();
-    let mut decoder = get_codecs().make(&track.codec_params, &decode_opts)?;
+    let pcm_data: Vec<f32> = wav
+        .samples::<i32>()
+        .filter_map(|sample| sample.ok())
+        .map(|sample| sample as f32 / 32_768.0)
+        .collect();
 
-    while let Ok(packet) = format.next_packet() {
-        let bytes = decoder.decode(&packet)?;
-
-        match bytes {
-            AudioBufferRef::F32(buf) => {
-                pcm_data.extend(buf.chan(0));
-            }
-            AudioBufferRef::U8(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-            AudioBufferRef::U16(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-            AudioBufferRef::U24(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-            AudioBufferRef::U32(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-            AudioBufferRef::S8(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-            AudioBufferRef::S16(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-            AudioBufferRef::S24(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-            AudioBufferRef::S32(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-            AudioBufferRef::F64(data) => {
-                pcm_data.extend(data.chan(0).iter().map(|b| f32::from_sample(*b)))
-            }
-        }
-    }
+    debug!("🚧 PCM data {:#?}", pcm_data.len());
 
     let mel_binary_128 = include_bytes!("../melfilters128.bytes");
-
-    let mel_binary = mel_binary_128;
     let byte_length = 128;
+    let mut mel_filters = vec![0f32; mel_binary_128.len() / 4];
 
-    let mut mel_filters = vec![0f32; mel_binary.len() / 4];
-    <byteorder::LittleEndian as byteorder::ByteOrder>::read_f32_into(mel_binary, &mut mel_filters);
-
-    debug!("🚧 pcm data {:#?}", pcm_data.len());
+    <byteorder::LittleEndian as byteorder::ByteOrder>::read_f32_into(
+        mel_binary_128,
+        &mut mel_filters,
+    );
 
     let mel = audio::pcm_to_mel(&config, &pcm_data, &mel_filters);
     let mel_length = mel.len();
-
     let mel = Tensor::from_vec(mel, (1, byte_length, mel_length / byte_length), &device)?;
 
     let model = whisper::model::Whisper::load(&vb, config)?;
