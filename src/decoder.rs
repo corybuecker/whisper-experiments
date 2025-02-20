@@ -1,8 +1,9 @@
+use core::f64;
+
 use anyhow::{Context, Result};
 use candle_core::{Device, IndexOp, Tensor, D};
 use candle_nn::ops::{log_softmax, softmax};
 use candle_transformers::models::whisper::{self as m, model::Whisper};
-use core::f32;
 use tokenizers::Tokenizer;
 use tracing::{debug, info};
 
@@ -12,6 +13,7 @@ pub struct Decoder {
     sot_token: u32,
     transcribe_token: u32,
     eot_token: u32,
+    no_speech_token: u32,
     start_timestamp_token: u32,
     mask_timestamps_tensor: Tensor,
     mask_non_timestamps_tensor: Tensor,
@@ -80,6 +82,9 @@ impl Decoder {
         let eot_token = tokenizer
             .token_to_id(m::EOT_TOKEN)
             .context("could not get token")?;
+        let no_speech_token = tokenizer
+            .token_to_id(m::NO_SPEECH_TOKENS[1])
+            .context("could not get token")?;
 
         let (
             mask_timestamps_tensor,
@@ -94,6 +99,7 @@ impl Decoder {
             sot_token,
             transcribe_token,
             eot_token,
+            no_speech_token,
             mask_timestamps_tensor,
             mask_non_timestamps_tensor,
             start_timestamp_token,
@@ -137,7 +143,7 @@ impl Decoder {
                     // both are timestmps, no more timestamps; cannot be EOT since there were
                     // two timestamps
                     zeroes = zeroes.add(&self.mask_timestamps_tensor)?;
-                } else {
+                } else if second_last != 50360 {
                     //only one timestamp, looking for another, ge timestamp or EOT
                     zeroes = zeroes.add(&self.mask_non_timestamps_tensor)?;
                     let smaller_timestamps =
@@ -149,7 +155,7 @@ impl Decoder {
 
         Ok(zeroes)
     }
-    pub fn decode(&mut self, mel: &Tensor) -> Result<(Vec<u32>, f64)> {
+    pub fn decode(&mut self, mel: &Tensor) -> Result<(Vec<u32>, f64, f64)> {
         let audio_features = self.model.encoder.forward(mel, true)?;
         let mut tokens = vec![self.sot_token];
         let en_token = self.tokenizer.token_to_id("<|en|>").unwrap();
@@ -158,6 +164,7 @@ impl Decoder {
         tokens.push(self.transcribe_token);
         // tokens.push(self.tokenizer.token_to_id(m::NO_TIMESTAMPS_TOKEN).unwrap());
         let sample_len = self.model.config.max_target_positions / 2;
+        let mut no_speech_prob = f64::NAN;
         for i in 0..sample_len {
             let tokens_t = Tensor::new(tokens.as_slice(), mel.device())?;
 
@@ -177,6 +184,12 @@ impl Decoder {
                 .final_linear(&ys.i((..1, seq_len - 1..))?)?
                 .i(0)?
                 .i(0)?;
+
+            if i == 0 {
+                no_speech_prob = softmax(&logits, 0)?
+                    .i(self.no_speech_token as usize)?
+                    .to_scalar::<f32>()? as f64;
+            }
 
             let logits = logits.add(&suppress_tokens)?;
 
@@ -235,7 +248,7 @@ impl Decoder {
             sum_logprob += prob.ln();
         }
         let avg_prob = sum_logprob / tokens.len() as f64;
-        Ok((tokens, avg_prob))
+        Ok((tokens, avg_prob, no_speech_prob))
     }
 
     pub fn run(&mut self, mel: &Tensor) -> Result<Vec<u32>> {
@@ -246,12 +259,9 @@ impl Decoder {
 
         while seek < content_frames {
             self.debug = false;
-            if seek == 3000 {
-                self.debug = true;
-            }
             let segment_size = usize::min(content_frames - seek, m::N_FRAMES);
             let mel_segment = mel.narrow(2, seek, segment_size)?;
-            let (tokens, _) = self.decode(&mel_segment)?;
+            let (tokens, _avg_prob, _no_speech_prob) = self.decode(&mel_segment)?;
 
             let all_tokens = tokens.clone();
             let [second_last, last, _] = all_tokens[all_tokens.len() - 3..] else {
