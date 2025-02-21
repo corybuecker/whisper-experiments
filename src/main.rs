@@ -6,9 +6,9 @@ use candle_core::Device;
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper::{self};
 use signal_processing::load_audio_file;
-use std::{fs::read, path::PathBuf};
+use std::{env::args, fs::read, path::PathBuf};
 use tokenizers::Tokenizer;
-use tracing::Level;
+use tracing::{debug, Level};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,6 +18,10 @@ async fn main() -> Result<()> {
             .finish(),
     )?;
 
+    let args: Vec<String> = args().collect();
+    debug!("🚧 {:#?}", args);
+    let file_arg = args[2].clone();
+
     let device = Device::new_metal(0)?;
     let tokenizer =
         Tokenizer::from_file(PathBuf::from("/Volumes/AI/models/whisper/tokenizer.json")).unwrap();
@@ -25,7 +29,7 @@ async fn main() -> Result<()> {
         "/Volumes/AI/models/whisper/config.json",
     ))?)?;
 
-    let mel = load_audio_file("output.short100s.wav", &config, &device)?;
+    let mel = load_audio_file(&file_arg, &config, &device)?;
 
     let file = read("/Volumes/AI/models/whisper/model.safetensors")?;
     let vb = VarBuilder::from_slice_safetensors(&file, whisper::DTYPE, &device)?;
