@@ -8,7 +8,7 @@ use candle_transformers::models::whisper::{self};
 use signal_processing::load_audio_file;
 use std::{env::args, fs::read, path::PathBuf};
 use tokenizers::Tokenizer;
-use tracing::{debug, Level};
+use tracing::Level;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,9 +18,10 @@ async fn main() -> Result<()> {
             .finish(),
     )?;
 
-    let args: Vec<String> = args().collect();
-    debug!("🚧 {:#?}", args);
-    let file_arg = args[2].clone();
+    let file = args()
+        .position(|arg| arg == "--file")
+        .and_then(|index| args().nth(index + 1))
+        .ok_or_else(|| anyhow::anyhow!("Missing required --file argument"))?;
 
     let device = Device::new_metal(0)?;
     let tokenizer =
@@ -29,7 +30,7 @@ async fn main() -> Result<()> {
         "/Volumes/AI/models/whisper/config.json",
     ))?)?;
 
-    let mel = load_audio_file(&file_arg, &config, &device)?;
+    let mel = load_audio_file(&file, &config, &device)?;
 
     let file = read("/Volumes/AI/models/whisper/model.safetensors")?;
     let vb = VarBuilder::from_slice_safetensors(&file, whisper::DTYPE, &device)?;
