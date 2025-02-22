@@ -1,8 +1,6 @@
-use core::f64;
-
 use anyhow::{Context, Result};
 use candle_core::{Device, IndexOp, Tensor, D};
-use candle_nn::ops::{log_softmax, softmax};
+use candle_nn::ops::log_softmax;
 use candle_transformers::models::whisper::{self as m, model::Whisper};
 use tokenizers::Tokenizer;
 use tracing::{debug, info};
@@ -13,11 +11,14 @@ pub struct Decoder {
     sot_token: u32,
     transcribe_token: u32,
     eot_token: u32,
+    #[allow(dead_code)]
     no_speech_token: u32,
     start_timestamp_token: u32,
     mask_timestamps_tensor: Tensor,
     mask_non_timestamps_tensor: Tensor,
     mask_no_timestamps_tensor: Tensor,
+    #[allow(dead_code)]
+    mask_eot_tensor: Tensor,
     debug: bool,
 }
 
@@ -90,7 +91,7 @@ impl Decoder {
             mask_timestamps_tensor,
             mask_non_timestamps_tensor,
             mask_no_timestamps_tensor,
-            _mask_eot_tensor,
+            mask_eot_tensor,
         ) = build_mask_tensors(model.config.vocab_size, &tokenizer, device)?;
 
         Ok(Self {
@@ -101,6 +102,7 @@ impl Decoder {
             eot_token,
             no_speech_token,
             mask_timestamps_tensor,
+            mask_eot_tensor,
             mask_non_timestamps_tensor,
             start_timestamp_token,
             mask_no_timestamps_tensor,
@@ -146,6 +148,7 @@ impl Decoder {
                 } else if second_last != 50360 {
                     //only one timestamp, looking for another, ge timestamp or EOT
                     zeroes = zeroes.add(&self.mask_non_timestamps_tensor)?;
+                    //zeroes = zeroes.add(&self.mask_eot_tensor)?;
                     let smaller_timestamps =
                         self.suppress_smaller_timestamps(last.try_into().unwrap(), device)?;
                     zeroes = zeroes.add(&smaller_timestamps)?;
@@ -155,16 +158,14 @@ impl Decoder {
 
         Ok(zeroes)
     }
-    pub fn decode(&mut self, mel: &Tensor) -> Result<(Vec<u32>, f64, f64)> {
+    pub fn decode(&mut self, mel: &Tensor) -> Result<Vec<u32>> {
         let audio_features = self.model.encoder.forward(mel, true)?;
         let mut tokens = vec![self.sot_token];
         let en_token = self.tokenizer.token_to_id("<|en|>").unwrap();
-        let mut sum_logprob = 0.0;
         tokens.push(en_token);
         tokens.push(self.transcribe_token);
         // tokens.push(self.tokenizer.token_to_id(m::NO_TIMESTAMPS_TOKEN).unwrap());
         let sample_len = self.model.config.max_target_positions / 2;
-        let mut no_speech_prob = f64::NAN;
         for i in 0..sample_len {
             let tokens_t = Tensor::new(tokens.as_slice(), mel.device())?;
 
@@ -175,6 +176,7 @@ impl Decoder {
             let ys = self
                 .model
                 .decoder
+                // Curious...what does the cache do?
                 .forward(&tokens_t, &audio_features, i == 0)?;
 
             let (_, seq_len, _) = ys.dims3()?;
@@ -185,37 +187,20 @@ impl Decoder {
                 .i(0)?
                 .i(0)?;
 
-            if i == 0 {
-                no_speech_prob = softmax(&logits, 0)?
-                    .i(self.no_speech_token as usize)?
-                    .to_scalar::<f32>()? as f64;
-            }
-
             let logits = logits.add(&suppress_tokens)?;
 
             let log_sm_logits = log_softmax(&logits, D::Minus1)?;
-
-            let largest_non_timestamp_prob = log_sm_logits.to_vec1::<f32>()?;
+            let non_timestamp_prob_tensor =
+                log_sm_logits.i(..self.start_timestamp_token as usize)?;
             let largest_non_timestamp_prob =
-                &largest_non_timestamp_prob[..self.start_timestamp_token as usize];
-            let largest_non_timestamp_prob = largest_non_timestamp_prob
-                .iter()
-                .max_by(|u, v| u.total_cmp(v))
-                .unwrap()
-                .to_owned();
+                non_timestamp_prob_tensor.max(D::Minus1)?.to_scalar()?;
 
-            let timestamp_logits = log_sm_logits.to_vec1::<f32>()?;
-            let timestamp_logits = &timestamp_logits[self.start_timestamp_token as usize..];
-            let timestamp_logits = Tensor::from_vec(
-                timestamp_logits.to_vec(),
-                timestamp_logits.len(),
-                mel.device(),
-            )?;
+            let timestamp_prob_tensor = log_sm_logits
+                .i(self.start_timestamp_token as usize..)?
+                .log_sum_exp(D::Minus1)?;
+            let timestamp_prob = timestamp_prob_tensor.to_scalar::<f32>()?;
 
-            let sum = timestamp_logits.log_sum_exp(D::Minus1)?;
-            let sum = sum.to_scalar::<f32>()?;
-
-            let logits = if sum > largest_non_timestamp_prob {
+            let logits = if timestamp_prob > largest_non_timestamp_prob {
                 logits.add(&self.mask_non_timestamps_tensor)?
             } else {
                 logits
@@ -237,18 +222,13 @@ impl Decoder {
 
             tokens.push(next_token);
 
-            let prob = softmax(&logits, candle_core::D::Minus1)?
-                .i(next_token as usize)?
-                .to_scalar::<f32>()? as f64;
-
             if next_token == self.eot_token || tokens.len() > self.model.config.max_target_positions
             {
                 break;
             }
-            sum_logprob += prob.ln();
         }
-        let avg_prob = sum_logprob / tokens.len() as f64;
-        Ok((tokens, avg_prob, no_speech_prob))
+
+        Ok(tokens)
     }
 
     pub fn run(&mut self, mel: &Tensor) -> Result<Vec<u32>> {
@@ -261,20 +241,16 @@ impl Decoder {
             self.debug = false;
             let segment_size = usize::min(content_frames - seek, m::N_FRAMES);
             let mel_segment = mel.narrow(2, seek, segment_size)?;
-            let (tokens, _avg_prob, _no_speech_prob) = self.decode(&mel_segment)?;
+            let tokens = self.decode(&mel_segment)?;
 
             let all_tokens = tokens.clone();
-            let [second_last, last, _] = all_tokens[all_tokens.len() - 3..] else {
+            let [_second_last, last, _] = all_tokens[all_tokens.len() - 3..] else {
                 panic!()
             };
 
             if last > self.start_timestamp_token {
-                if second_last > self.start_timestamp_token {
-                    let diff = (last - self.start_timestamp_token) as usize;
-                    seek += diff * input_stride;
-                } else {
-                    seek += segment_size;
-                }
+                let diff = (last - self.start_timestamp_token) as usize;
+                seek += diff * input_stride;
             } else {
                 seek += segment_size;
             }
