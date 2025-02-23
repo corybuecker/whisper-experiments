@@ -30,6 +30,7 @@ huggingface-cli login
 ## Usage
 
 1. Convert your MP3 file to the required format:
+   - Mono, single channel
    - 16-bit depth
    - 16kHz sample rate
    - WAV format
