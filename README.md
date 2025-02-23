@@ -42,6 +42,8 @@ ffmpeg -i input.mp3 -ac 1 -acodec pcm_s16le -ar 16000 -map_metadata -1 output.wa
 cargo run --release --features metal -- --file output.wav
 ```
 
+Once the transcription process completes, it will write a JSON file with the full text and each parsed segment with its timestamps.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

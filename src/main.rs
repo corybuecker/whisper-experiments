@@ -1,13 +1,16 @@
 mod decoder;
+mod json;
 mod signal_processing;
 
 use anyhow::Result;
 use candle_core::Device;
 use candle_nn::VarBuilder;
-use candle_transformers::models::whisper::{self};
+use candle_transformers::models::whisper;
+use json::Transcript;
 use signal_processing::load_audio_file;
-use std::{env::args, fs::read, path::PathBuf};
+use std::{env::args, path::PathBuf};
 use tokenizers::Tokenizer;
+use tokio::io::AsyncWriteExt;
 use tracing::Level;
 
 #[tokio::main]
@@ -32,12 +35,18 @@ async fn main() -> Result<()> {
 
     let mel = load_audio_file(&file, &config, &device)?;
 
-    let file = read("/Volumes/AI/models/whisper/model.safetensors")?;
-    let vb = VarBuilder::from_slice_safetensors(&file, whisper::DTYPE, &device)?;
+    let weights = tokio::fs::read("/Volumes/AI/models/whisper/model.safetensors").await?;
+    let vb = VarBuilder::from_slice_safetensors(&weights, whisper::DTYPE, &device)?;
     let model = whisper::model::Whisper::load(&vb, config)?;
     let mut decoder = decoder::Decoder::new(model, tokenizer, &device)?;
 
-    decoder.run(&mel)?;
+    let segments = decoder.run(&mel)?;
+    let transcript = Transcript::new(segments)?;
+
+    let mut json_file = tokio::fs::File::create(format!("{}.json", file)).await?;
+    json_file
+        .write_all(transcript.to_json()?.as_bytes())
+        .await?;
 
     Ok(())
 }

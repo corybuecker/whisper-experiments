@@ -160,12 +160,12 @@ impl Decoder {
     }
     pub fn decode(&mut self, mel: &Tensor) -> Result<Vec<u32>> {
         let audio_features = self.model.encoder.forward(mel, true)?;
-        let mut tokens = vec![self.sot_token];
         let en_token = self.tokenizer.token_to_id("<|en|>").unwrap();
+        let mut tokens = vec![self.sot_token];
+        let sample_len = self.model.config.max_target_positions / 2;
+
         tokens.push(en_token);
         tokens.push(self.transcribe_token);
-        // tokens.push(self.tokenizer.token_to_id(m::NO_TIMESTAMPS_TOKEN).unwrap());
-        let sample_len = self.model.config.max_target_positions / 2;
         for i in 0..sample_len {
             let tokens_t = Tensor::new(tokens.as_slice(), mel.device())?;
 
@@ -231,7 +231,8 @@ impl Decoder {
         Ok(tokens)
     }
 
-    pub fn run(&mut self, mel: &Tensor) -> Result<Vec<u32>> {
+    pub fn run(&mut self, mel: &Tensor) -> Result<Vec<String>> {
+        let mut segments = vec![];
         debug!("starting model run");
         let (_, _, content_frames) = mel.dims3()?;
         let mut seek = 0;
@@ -255,9 +256,10 @@ impl Decoder {
                 seek += segment_size;
             }
             let decode_all = self.tokenizer.decode(&all_tokens, false).unwrap();
-
-            info!("🚧 {:#?}", decode_all);
+            info!("🚧 {:#?}", &decode_all);
+            segments.push(decode_all);
         }
-        Ok(vec![])
+
+        Ok(segments)
     }
 }
