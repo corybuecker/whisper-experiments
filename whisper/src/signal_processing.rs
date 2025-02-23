@@ -3,7 +3,7 @@ mod file;
 use anyhow::Result;
 use byteorder::{ByteOrder, LittleEndian};
 use candle_core::{Device, Tensor};
-use candle_transformers::models::whisper::{audio::pcm_to_mel, Config};
+use candle_transformers::models::whisper::{Config, audio::pcm_to_mel};
 use hound::WavReader;
 use std::{fmt, fs::read};
 use tracing::debug;

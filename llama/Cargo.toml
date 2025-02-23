@@ -1,0 +1,25 @@
+[package]
+name = "llama"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.96"
+candle-core = { version = "0.8.3", default-features = false }
+candle-nn = { version = "0.8.3", default-features = false }
+candle-transformers = { version = "0.8.3", default-features = false }
+serde_json = "1.0.139"
+tokenizers = "0.21.0"
+tokio = { version = "1.43.0", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+
+[features]
+metal = [
+  "candle-nn/metal",
+  "candle-nn/accelerate",
+  "candle-transformers/metal",
+  "candle-transformers/accelerate",
+  "candle-core/metal",
+  "candle-core/accelerate"
+]
