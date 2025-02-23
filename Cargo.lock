@@ -1996,6 +1996,8 @@ dependencies = [
  "candle-nn",
  "candle-transformers",
  "hound",
+ "regex",
+ "serde",
  "serde_json",
  "tokenizers",
  "tokio",
