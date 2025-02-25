@@ -23,26 +23,28 @@ async fn main() -> Result<()> {
 
     let device = Device::new_metal(0)?;
 
+    //    let tokenizer = Tokenizer::from_file(PathBuf::from(
+    //        "/Volumes/AI/models/llama-1b-instruct/tokenizer.json",
+    //    ))
+    //    .unwrap();
+    //    let config: LlamaConfig = serde_json::from_slice(&std::fs::read(PathBuf::from(
+    //        "/Volumes/AI/models/llama-1b-instruct/config.json",
+    //    ))?)?;
+    //    let weights = tokio::fs::read("/Volumes/AI/models/llama-1b-instruct/model.safetensors").await?;
+    //    let vb = VarBuilder::from_slice_safetensors(&weights, DType::F16, &device)?;
+
     let tokenizer = Tokenizer::from_file(PathBuf::from(
-        "/Volumes/AI/models/llama-1b-instruct/tokenizer.json",
+        "/Volumes/AI/models/llama-3b-instruct/tokenizer.json",
     ))
     .unwrap();
     let config: LlamaConfig = serde_json::from_slice(&std::fs::read(PathBuf::from(
-        "/Volumes/AI/models/llama-1b-instruct/config.json",
+        "/Volumes/AI/models/llama-3b-instruct/config.json",
     ))?)?;
-    let weights = tokio::fs::read("/Volumes/AI/models/llama-1b-instruct/model.safetensors").await?;
-    let vb = VarBuilder::from_slice_safetensors(&weights, DType::F16, &device)?;
-
-    //  let tokenizer =
-    //      Tokenizer::from_file(PathBuf::from("/Volumes/AI/models/llama-3b/tokenizer.json")).unwrap();
-    //  let config: LlamaConfig = serde_json::from_slice(&std::fs::read(PathBuf::from(
-    //      "/Volumes/AI/models/llama-3b/config.json",
-    //  ))?)?;
-    //  let filename = vec![
-    //      "/Volumes/AI/models/llama-3b/model-00001-of-00002.safetensors".to_string(),
-    //      "/Volumes/AI/models/llama-3b/model-00002-of-00002.safetensors".to_string(),
-    //  ];
-    //  let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filename, DType::F16, &device)? };
+    let filename = vec![
+        "/Volumes/AI/models/llama-3b-instruct/model-00001-of-00002.safetensors".to_string(),
+        "/Volumes/AI/models/llama-3b-instruct/model-00002-of-00002.safetensors".to_string(),
+    ];
+    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filename, DType::BF16, &device)? };
 
     let config = config.into_config(false);
     let eos_token_id = config
@@ -51,7 +53,7 @@ async fn main() -> Result<()> {
         .ok_or(anyhow!("could not find EOT"))?;
     let model = Llama::load(vb, &config)?;
     let mut logits_processor = LogitsProcessor::from_sampling(8381264505028, Sampling::ArgMax);
-    let mut cache = llama::Cache::new(true, DType::F16, &config, &device)?;
+    let mut cache = llama::Cache::new(true, DType::BF16, &config, &device)?;
 
     let mut tokens = tokenizer
         .encode(prompt, true)
