@@ -1,5 +1,6 @@
 /target
-/*.wav
-/*.bytes
-/*.mp3
-/*.json
+*.wav
+*.bytes
+*.mp3
+*.json
+*.prompt
