@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use candle_core::{Device, IndexOp, Tensor, D};
+use candle_core::{D, Device, IndexOp, Tensor};
 use candle_nn::ops::log_softmax;
 use candle_transformers::models::whisper::{self as m, model::Whisper};
 use tokenizers::Tokenizer;

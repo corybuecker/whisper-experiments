@@ -27,15 +27,24 @@ async fn main() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Missing required --file argument"))?;
 
     let device = Device::new_metal(0)?;
+
+    //    let tokenizer = Tokenizer::from_file(PathBuf::from(
+    //        "/Volumes/AI/models/crisper-whisper/tokenizer.json",
+    //    ))
+    //    .map_err(|_| anyhow!("could not load model").context("Tokenizer"))?;
+    //    let config: whisper::Config = serde_json::from_slice(&std::fs::read(PathBuf::from(
+    //        "/Volumes/AI/models/crisper-whisper/config.json",
+    //    ))?)?;
+    //    let weights = tokio::fs::read("/Volumes/AI/models/crisper-whisper/model.safetensors").await?;
     let tokenizer =
         Tokenizer::from_file(PathBuf::from("/Volumes/AI/models/whisper/tokenizer.json")).unwrap();
     let config: whisper::Config = serde_json::from_slice(&std::fs::read(PathBuf::from(
         "/Volumes/AI/models/whisper/config.json",
     ))?)?;
+    let weights = tokio::fs::read("/Volumes/AI/models/whisper/model.safetensors").await?;
 
     let mel = load_audio_file(&file, &config, &device)?;
 
-    let weights = tokio::fs::read("/Volumes/AI/models/whisper/model.safetensors").await?;
     let vb = VarBuilder::from_slice_safetensors(&weights, whisper::DTYPE, &device)?;
     let model = whisper::model::Whisper::load(&vb, config)?;
     let mut decoder = decoder::Decoder::new(model, tokenizer, &device)?;
