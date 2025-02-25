@@ -38,7 +38,8 @@ pub fn load_audio_file(filename: &str, config: &Config, device: &Device) -> Resu
 
     debug!("🚧 PCM data {:#?}", pcm_data.len());
 
-    let mel_binary_128 = read("melfilters128.bytes")?;
+    let mel_binary_128 = read("melfilter.bytes")?;
+
     let byte_length = 128;
     let mut mel_filters = vec![0f32; mel_binary_128.len() / 4];
 

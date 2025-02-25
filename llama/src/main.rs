@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use anyhow::{Result, anyhow};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
@@ -7,8 +5,9 @@ use candle_transformers::{
     generation::{LogitsProcessor, Sampling},
     models::llama::{self, Llama, LlamaConfig, LlamaEosToks},
 };
+use std::path::PathBuf;
 use tokenizers::Tokenizer;
-use tracing::{Level, debug};
+use tracing::Level;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,16 +32,18 @@ async fn main() -> Result<()> {
     let weights = tokio::fs::read("/Volumes/AI/models/llama-1b-instruct/model.safetensors").await?;
     let vb = VarBuilder::from_slice_safetensors(&weights, DType::F16, &device)?;
 
-    //  let tokenizer =
-    //      Tokenizer::from_file(PathBuf::from("/Volumes/AI/models/llama-3b/tokenizer.json")).unwrap();
-    //  let config: LlamaConfig = serde_json::from_slice(&std::fs::read(PathBuf::from(
-    //      "/Volumes/AI/models/llama-3b/config.json",
-    //  ))?)?;
-    //  let filename = vec![
-    //      "/Volumes/AI/models/llama-3b/model-00001-of-00002.safetensors".to_string(),
-    //      "/Volumes/AI/models/llama-3b/model-00002-of-00002.safetensors".to_string(),
-    //  ];
-    //  let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filename, DType::F16, &device)? };
+    //    let tokenizer = Tokenizer::from_file(PathBuf::from(
+    //        "/Volumes/AI/models/llama-3b-instruct/tokenizer.json",
+    //    ))
+    //    .unwrap();
+    //    let config: LlamaConfig = serde_json::from_slice(&std::fs::read(PathBuf::from(
+    //        "/Volumes/AI/models/llama-3b-instruct/config.json",
+    //    ))?)?;
+    //    let filename = vec![
+    //        "/Volumes/AI/models/llama-3b-instruct/model-00001-of-00002.safetensors".to_string(),
+    //        "/Volumes/AI/models/llama-3b-instruct/model-00002-of-00002.safetensors".to_string(),
+    //    ];
+    //    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filename, DType::F32, &device)? };
 
     let config = config.into_config(false);
     let eos_token_id = config
@@ -55,11 +56,10 @@ async fn main() -> Result<()> {
 
     let mut tokens = tokenizer
         .encode(prompt, true)
-        .map_err(|_| anyhow!("could not build tokenizer"))?
+        .map_err(|_| anyhow!("could not build tokenizer").context("Tokenizer"))?
         .get_ids()
         .to_vec();
 
-    debug!("🚧 {:#?}", tokens);
     let mut index_pos = 0_usize;
     for index in 0..1000 {
         let (context_size, _context_index) = if index > 0 {

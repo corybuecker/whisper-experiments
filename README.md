@@ -27,6 +27,18 @@ huggingface-cli login
 ./download_models.sh
 ```
 
+4. Create the Mel spectrogram filter bank with Python:
+```bash
+pip install librosa
+```
+
+```python
+import numpy as np
+from librosa import filters
+
+filters.mel(sr=16000, n_fft=400, n_mels=128, dtype=np.float32).flatten().tofile("melfilter.bytes")
+```
+
 ## Usage
 
 1. Convert your MP3 file to the required format:
