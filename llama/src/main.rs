@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use anyhow::{Result, anyhow};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
@@ -7,6 +5,7 @@ use candle_transformers::{
     generation::{LogitsProcessor, Sampling},
     models::llama::{self, Llama, LlamaConfig, LlamaEosToks},
 };
+use std::path::PathBuf;
 use tokenizers::Tokenizer;
 use tracing::{Level, debug};
 
