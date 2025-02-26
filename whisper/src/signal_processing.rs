@@ -1,27 +1,17 @@
 mod file;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use byteorder::{ByteOrder, LittleEndian};
 use candle_core::{Device, Tensor};
 use candle_transformers::models::whisper::{Config, audio::pcm_to_mel};
 use hound::WavReader;
-use std::{fmt, fs::read};
 use tracing::debug;
 
 const SAMPLE: f32 = 32_768.0;
 
-#[derive(Debug)]
-pub struct SignalProcessingError {}
-impl std::fmt::Display for SignalProcessingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SuperError is here!")
-    }
-}
-impl std::error::Error for SignalProcessingError {}
-
-pub fn load_audio_file(filename: &str, config: &Config, device: &Device) -> Result<Tensor> {
-    let mut wav = WavReader::open(filename).or(Err(SignalProcessingError {}))?;
-    //   let mut wav = WavReader::open("full.wav")?;
+pub async fn load_audio_file(filename: &str, config: &Config, device: &Device) -> Result<Tensor> {
+    let mut wav =
+        WavReader::open(filename).map_err(|e| anyhow!("Failed to read WAV file: {}", e))?;
 
     let spec = wav.spec();
 
@@ -38,7 +28,9 @@ pub fn load_audio_file(filename: &str, config: &Config, device: &Device) -> Resu
 
     debug!("🚧 PCM data {:#?}", pcm_data.len());
 
-    let mel_binary_128 = read("melfilter.bytes")?;
+    let mel_binary_128 = tokio::fs::read("melfilters128.bytes")
+        .await
+        .map_err(|e| anyhow!("Failed to load Mel filters: {}", e))?;
 
     let byte_length = 128;
     let mut mel_filters = vec![0f32; mel_binary_128.len() / 4];

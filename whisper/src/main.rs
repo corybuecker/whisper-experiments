@@ -2,7 +2,7 @@ mod decoder;
 mod json;
 mod signal_processing;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use candle_core::Device;
 use candle_nn::VarBuilder;
 use candle_transformers::models::whisper;
@@ -37,13 +37,17 @@ async fn main() -> Result<()> {
     //    ))?)?;
     //    let weights = tokio::fs::read("/Volumes/AI/models/crisper-whisper/model.safetensors").await?;
     let tokenizer =
-        Tokenizer::from_file(PathBuf::from("/Volumes/AI/models/whisper/tokenizer.json")).unwrap();
-    let config: whisper::Config = serde_json::from_slice(&std::fs::read(PathBuf::from(
-        "/Volumes/AI/models/whisper/config.json",
-    ))?)?;
-    let weights = tokio::fs::read("/Volumes/AI/models/whisper/model.safetensors").await?;
+        Tokenizer::from_file(PathBuf::from("/Volumes/AI/models/whisper/tokenizer.json"))
+            .map_err(|e| anyhow!("Failed to initialize tokenizer: {}", e))?;
+    let config: whisper::Config = serde_json::from_slice(
+        &std::fs::read(PathBuf::from("/Volumes/AI/models/whisper/config.json"))
+            .map_err(|e| anyhow!("Failed to load config: {}", e))?,
+    )?;
+    let weights = tokio::fs::read("/Volumes/AI/models/whisper/model.safetensors")
+        .await
+        .map_err(|e| anyhow!("Failed to load safetensors: {}", e))?;
 
-    let mel = load_audio_file(&file, &config, &device)?;
+    let mel = load_audio_file(&file, &config, &device).await?;
 
     let vb = VarBuilder::from_slice_safetensors(&weights, whisper::DTYPE, &device)?;
     let model = whisper::model::Whisper::load(&vb, config)?;
