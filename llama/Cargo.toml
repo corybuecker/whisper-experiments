@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.97"
+anyhow = "1.0.98"
 candle-core = { version = "0.8.4", default-features = false }
 candle-nn = { version = "0.8.4", default-features = false }
 candle-transformers = { version = "0.8.4", default-features = false }
