@@ -8,7 +8,7 @@ anyhow = "1.0.98"
 byteorder = "1.5.0"
 candle-core = { version = "0.8.4", default-features = false }
 candle-nn = { version = "0.8.4", default-features = false }
-candle-transformers = { version = "0.8.4", default-features = false }
+candle-transformers = { version = "0.9.1", default-features = false }
 hound = "3.5.1"
 regex = "1.11.1"
 serde = "1.0.219"
