@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
     let segments = decoder.run(&mel)?;
     let transcript = Transcript::new(segments)?;
 
-    let mut json_file = tokio::fs::File::create(format!("{}.json", file)).await?;
+    let mut json_file = tokio::fs::File::create(format!("{file}.json")).await?;
     json_file
         .write_all(transcript.to_json()?.as_bytes())
         .await?;
