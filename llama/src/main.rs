@@ -94,6 +94,6 @@ async fn main() -> Result<()> {
         .decode(&tokens, false)
         .map_err(|_| anyhow!("could not parse tokens"))?;
 
-    print!("{}", text);
+    print!("{text}");
     Ok(())
 }

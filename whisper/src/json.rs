@@ -51,7 +51,7 @@ impl Transcript {
             let mut raw_segment = raw_segment.to_owned();
 
             if !raw_segment.ends_with("<|endoftext|>") {
-                raw_segment = format!("{}<|30.00|>", raw_segment);
+                raw_segment = format!("{raw_segment}<|30.00|>");
             }
             let it = regex.captures_iter(&raw_segment);
             let mut segment_timestamps = vec![];
