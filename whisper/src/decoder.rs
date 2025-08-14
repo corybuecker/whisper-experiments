@@ -139,8 +139,8 @@ impl Decoder {
 
         let mut tokens: Vec<u32> = tokens.to_vec1()?;
 
-        if let (Some(last), Some(second_last)) = (tokens.pop(), tokens.pop()) {
-            if last > self.start_timestamp_token {
+        if let (Some(last), Some(second_last)) = (tokens.pop(), tokens.pop())
+            && last > self.start_timestamp_token {
                 if second_last > self.start_timestamp_token {
                     // both are timestmps, no more timestamps; cannot be EOT since there were
                     // two timestamps
@@ -154,7 +154,6 @@ impl Decoder {
                     zeroes = zeroes.add(&smaller_timestamps)?;
                 }
             }
-        }
 
         Ok(zeroes)
     }
