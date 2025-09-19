@@ -13,7 +13,7 @@ hound = "3.5.1"
 regex = "1.11.2"
 serde = "1.0.225"
 serde_json = "1.0.145"
-tokenizers = "0.22.0"
+tokenizers = "0.22.1"
 tokio = { version = "1.47.1", features = ["full"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
